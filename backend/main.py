@@ -239,6 +239,11 @@ def get_heroes():
             "support": [h for h, d in HEROES.items() if d["role"] == "support"]
         }
     }
+    
+    
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
 
 # === 서버 실행 ===
