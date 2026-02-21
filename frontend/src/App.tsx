@@ -1,0 +1,407 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import TriangleBackground from './components/TriangleBackground';
+import RoleIcon from './components/icon/RoleIcon';
+import OverwatchLogoIcon from './components/icon/OverwatchLogoIcon';
+import { useTimer } from './hooks/useTimer';
+import { api, generateLocalResult } from './hooks/useApi';
+import { ROLES } from './data/heroes';
+import { GameState, GameMode, Screen, Role, SubmitResult, RankingRecord } from './types';
+import './styles/index.css';
+import { getHeroImageSrc } from "./utils/heroImage";
+
+
+const App: React.FC = () => {
+  // 화면 상태
+  const [screen, setScreen] = useState<Screen>('menu');
+  const [gameMode, setGameMode] = useState<GameMode>('quick');
+
+  // 게임 상태
+  const [gameState, setGameState] = useState<GameState>('idle');
+  const [targetRoles, setTargetRoles] = useState<Role[]>([]);
+  const [puzzleTiles, setPuzzleTiles] = useState<(string | null)[]>([]);
+  const [emptyIndex, setEmptyIndex] = useState<number>(8);
+  const [moves, setMoves] = useState<number>(0);
+  const [puzzleId, setPuzzleId] = useState<string>('');
+
+  // 서버에서 받은 영웅 정보
+  const [heroesData, setHeroesData] = useState<Record<string, { name_ko: string; role: Role }>>({});
+
+  // 타이머
+  const { time, formattedTime, start: startTimer, stop: stopTimer, reset: resetTimer, formatTime } = useTimer();
+
+  // 모달 상태
+  const [showResultModal, setShowResultModal] = useState<boolean>(false);
+  const [showNicknameModal, setShowNicknameModal] = useState<boolean>(false);
+  const [showRankingModal, setShowRankingModal] = useState<boolean>(false);
+  const [result, setResult] = useState<SubmitResult | null>(null);
+  const [nickname, setNickname] = useState<string>('');
+  const [rankings, setRankings] = useState<RankingRecord[]>([]);
+
+  // 정답 확인
+  const checkSolved = useCallback((tiles: (string | null)[], roles: Role[], heroes: Record<string, { role: Role }>): boolean => {
+    for (let i = 0; i < 9; i++) {
+      const tile = tiles[i];
+      if (tile === null) continue;
+      if (!heroes[tile]) continue;
+      if (heroes[tile].role !== roles[i]) return false;
+    }
+    return true;
+  }, []);
+
+  // 퍼즐 초기화
+  const initPuzzle = useCallback(async (mode: GameMode): Promise<void> => {
+    stopTimer();      // 혹시 돌고 있던 타이머 정지
+    resetTimer();     // 0으로 초기화
+    setGameState('idle');
+    setMoves(0);
+
+    const puzzle = await api.createPuzzle(mode);
+    if (!puzzle) {
+      alert('퍼즐 생성 실패! 백엔드를 확인해주세요.');
+      return;
+    }
+
+    setPuzzleId(puzzle.puzzle_id);
+    setTargetRoles(puzzle.target_roles);
+    setPuzzleTiles(puzzle.initial_state);
+    setEmptyIndex(puzzle.empty_index);
+    setHeroesData(puzzle.heroes);
+
+    setGameState('playing');
+
+    // ✅ 화면에 퍼즐이 실제로 그려진 다음 타이머 시작
+    requestAnimationFrame(() => {
+      startTimer();
+    });
+  }, [resetTimer, startTimer, stopTimer]);
+
+  // 인접 확인
+  const isAdjacent = (idx1: number, idx2: number): boolean => {
+    const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
+    const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
+    return (Math.abs(r1 - r2) + Math.abs(c1 - c2)) === 1;
+  };
+
+  // 타일 이동
+  const moveTile = useCallback((index: number): void => {
+    if (!isAdjacent(index, emptyIndex)) return;
+    if (gameState === 'completed') return;
+
+    // // 첫 이동 시 게임 시작
+    // if (gameState === 'idle') {
+    //   setGameState('playing');
+    //   startTimer();
+    // }
+
+    // 타일 스왑
+    const newTiles = [...puzzleTiles];
+    newTiles[emptyIndex] = newTiles[index];
+    newTiles[index] = null;
+
+    setPuzzleTiles(newTiles);
+    setEmptyIndex(index);
+    setMoves(prev => prev + 1);
+
+    // 정답 확인
+    if (checkSolved(newTiles, targetRoles, heroesData)) {
+      setGameState('completed');
+      stopTimer();
+    }
+  }, [puzzleTiles, emptyIndex, gameState, targetRoles, heroesData, startTimer, stopTimer, checkSolved]);
+
+  // 게임 완료 처리
+  const handleGameComplete = useCallback(async (): Promise<void> => {
+    let resultData: SubmitResult;
+
+    if (gameMode === 'ranked') {
+      const response = await api.submitResult(puzzleId, time, moves);
+      resultData = response || generateLocalResult(moves, true);
+    } else {
+      resultData = generateLocalResult(moves, false);
+    }
+
+    setResult(resultData);
+    setShowResultModal(true);
+
+    // 랭킹전이고 랭킹권이면 닉네임 입력
+    if (gameMode === 'ranked' && resultData.is_rank_worthy) {
+      setTimeout(() => {
+        setShowResultModal(false);
+        setShowNicknameModal(true);
+      }, 2000);
+    }
+  }, [gameMode, puzzleId, time, moves]);
+
+  // 게임 완료 시 결과 처리
+  useEffect(() => {
+    if (gameState === 'completed') {
+      handleGameComplete();
+    }
+  }, [gameState, handleGameComplete]);
+
+  // 게임 시작
+  const startGame = async (mode: GameMode): Promise<void> => {
+    setGameMode(mode);
+    setScreen('loading');
+
+    await initPuzzle(mode);
+    setScreen('game');
+  };
+
+  // 메뉴로 돌아가기
+  const goToMenu = (): void => {
+    stopTimer();
+    setShowResultModal(false);
+    setShowNicknameModal(false);
+    setShowRankingModal(false);
+    setScreen('menu');
+  };
+
+  // 닉네임 제출
+  const submitNickname = async (): Promise<void> => {
+    if (!nickname.trim()) return;
+    await api.submitRanking(puzzleId, time, moves, nickname.trim());
+    setNickname('');
+    setShowNicknameModal(false);
+    fetchRankings();
+    setShowRankingModal(true);
+  };
+
+  // 랭킹 조회
+  const fetchRankings = async (): Promise<void> => {
+    const data = await api.getRankings(10);
+    setRankings(data.rankings || []);
+  };
+
+  // 랭킹 모달 열기
+  const showRanking = (): void => {
+    fetchRankings();
+    setShowRankingModal(true);
+  };
+
+  // 다시 하기
+  const retryGame = async (): Promise<void> => {
+    setShowResultModal(false);
+    await initPuzzle(gameMode);
+  };
+
+  // 키보드 이벤트 (닉네임 입력)
+  const handleNicknameKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      submitNickname();
+    }
+  };
+
+  return (
+      <div className="app">
+        <TriangleBackground />
+
+        {/* 메인 메뉴 */}
+        {screen === 'menu' && (
+            <div className="screen active">
+              <div className="menu-logo">
+                <OverwatchLogoIcon size={160} />
+                <div className="menu-title">OVERWATCH</div>
+                <div className="menu-subtitle">ROLE PUZZLE</div>
+              </div>
+              <div className="menu-buttons">
+                <button className="menu-btn primary" onClick={() => startGame('quick')}>일반전</button>
+                <button className="menu-btn primary" onClick={() => startGame('ranked')}>경쟁전</button>
+                <button className="menu-btn secondary" onClick={showRanking}>랭킹 보기</button>
+              </div>
+            </div>
+        )}
+
+        {/*로딩 화면*/}
+        {screen === "loading" && (
+            <div className="screen active">
+              <div className="loading-wrap">
+                <OverwatchLogoIcon size={140} />
+                <div className="loading-title">매칭 중…</div>
+                <div className="loading-sub">퍼즐 준비하는 중</div>
+
+                <div className="loading-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+
+                <button className="menu-btn secondary" onClick={goToMenu}>
+                  취소
+                </button>
+              </div>
+            </div>
+        )}
+
+        {/* 게임 화면 */}
+        {screen === 'game' && (
+            <div className="screen active">
+              <div className="game-header">
+                <button className="back-btn" onClick={goToMenu}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                  </svg>
+                  나가기
+                </button>
+                <span className="game-mode-label">{gameMode === 'ranked' ? '경쟁전' : '일반전'}</span>
+              </div>
+
+              <div className="game-stats">
+                <div className="stat-box">
+                  <div className="stat-label">시간</div>
+                  <div className="stat-value">{formattedTime}</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-label">이동</div>
+                  <div className="stat-value">{moves}</div>
+                </div>
+              </div>
+
+              <div className="puzzle-area">
+                {/* 목표 배치 (9칸 꽉 참) */}
+                <div>
+                  <div className="puzzle-label">목표 배치</div>
+                  <div className="puzzle-grid">
+                    {targetRoles.map((role, index) => (
+                        <div key={index} className={`role-slot ${role}`}>
+                          <RoleIcon role={role} size={36} />
+                          <span className="role-name">{ROLES[role].name}</span>
+                        </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 슬라이딩 퍼즐 (8개 영웅 + 1개 빈 칸) */}
+                <div>
+                  <div className="puzzle-label">슬라이딩 퍼즐</div>
+                  <div className="puzzle-grid">
+                    {puzzleTiles.map((heroId, index) => {
+                      if (heroId === null) {
+                        return <div key={index} className="hero-tile empty" />;
+                      }
+
+                      const hero = heroesData[heroId];
+                      if (!hero) {
+                        return <div key={index} className="hero-tile empty" />;
+                      }
+
+                      const isCorrect = hero.role === targetRoles[index];
+                      const isMovable = isAdjacent(index, emptyIndex);
+
+                      return (
+                          <div
+                              key={index}
+                              className={`hero-tile ${isCorrect ? "correct" : ""} ${isMovable ? "movable" : ""}`}
+                              onClick={() => isMovable && moveTile(index)}
+                          >
+                            <img
+                                className="hero-img"
+                                src={getHeroImageSrc(heroId)}
+                                alt={hero.name_ko}
+                                draggable={false}
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = "/heroes/_unknown.png";
+                                }}
+                            />
+                          </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <p className="game-hint">빈 칸 옆의 영웅을 클릭하여 이동하세요</p>
+            </div>
+        )}
+
+        {/* 결과 모달 */}
+        {showResultModal && result && (
+            <div className="modal-overlay active" onClick={() => setShowResultModal(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">🎉 퍼즐 완료!</h2>
+                <div className="result-grid">
+                  <div className="result-item">
+                    <div className="result-label">시간</div>
+                    <div className="result-value">{formatTime(time)}</div>
+                  </div>
+                  <div className="result-item">
+                    <div className="result-label">이동 횟수</div>
+                    <div className="result-value">{moves}회</div>
+                  </div>
+                  <div className="result-item">
+                    <div className="result-label">최적해</div>
+                    <div className="result-value">{result.optimal_moves}회</div>
+                  </div>
+                  <div className="result-item">
+                    <div className="result-label">오차</div>
+                    <div className="result-value" style={{ color: result.move_difference === 0 ? '#FFD700' : '#FFA500' }}>
+                      +{result.move_difference}
+                    </div>
+                  </div>
+                </div>
+                <div className={`grade ${result.grade.toLowerCase().replace(' ', '-')}`}>{result.grade}</div>
+                {gameMode === 'ranked' && result.is_rank_worthy && (
+                    <div className="rank-badge">🏆 {result.current_rank}위!</div>
+                )}
+                <div>
+                  <button className="modal-btn primary" onClick={retryGame}>다시 도전</button>
+                  <button className="modal-btn secondary" onClick={goToMenu}>메뉴로</button>
+                </div>
+              </div>
+            </div>
+        )}
+
+        {/* 닉네임 모달 */}
+        {showNicknameModal && (
+            <div className="modal-overlay active">
+              <div className="modal">
+                <h2 className="modal-title">🏆 랭킹 등록</h2>
+                <p style={{ color: '#7aa2b8', marginBottom: '15px' }}>
+                  {result?.current_rank}위에 진입!
+                </p>
+                <input
+                    type="text"
+                    className="nickname-input"
+                    placeholder="배틀태그 입력"
+                    maxLength={20}
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    onKeyPress={handleNicknameKeyPress}
+                    autoFocus
+                />
+                <div>
+                  <button className="modal-btn primary" onClick={submitNickname}>등록</button>
+                  <button className="modal-btn secondary" onClick={() => setShowNicknameModal(false)}>건너뛰기</button>
+                </div>
+              </div>
+            </div>
+        )}
+
+        {/* 랭킹 모달 */}
+        {showRankingModal && (
+            <div className="modal-overlay active" onClick={() => setShowRankingModal(false)}>
+              <div className="modal ranking-modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">🏆 TOP 10</h2>
+                <div className="ranking-list">
+                  {rankings.length === 0 ? (
+                      <p className="no-ranking">기록이 없습니다</p>
+                  ) : (
+                      rankings.map(r => (
+                          <div key={r.id} className="ranking-item">
+                            <span className="rank-position">#{r.rank}</span>
+                            <span className="rank-name">{r.nickname}</span>
+                            <span className="rank-time">{r.time_display}</span>
+                            <span className="rank-moves">{r.move_diff === 0 ? 'PERFECT' : `+${r.move_diff}`}</span>
+                          </div>
+                      ))
+                  )}
+                </div>
+                <button className="modal-btn secondary" onClick={() => setShowRankingModal(false)}>닫기</button>
+              </div>
+            </div>
+        )}
+      </div>
+  );
+};
+
+export default App;
