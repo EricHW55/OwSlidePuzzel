@@ -33,7 +33,6 @@ def make_target_roles(layout: str = "random") -> List[str]:
     layout = (layout or "random").lower()
 
     if layout == "cols":
-        # 1열=tank(0,3,6), 2열=dps(1,4,7), 3열=support(2,5,8)
         target = [""] * 9
         for idx in (0, 3, 6):
             target[idx] = "tank"
@@ -44,16 +43,14 @@ def make_target_roles(layout: str = "random") -> List[str]:
         return target
 
     if layout == "rows":
-        # 고정: 탱탱탱딜딜딜힐힐힐
         return ["tank"] * 3 + ["dps"] * 3 + ["support"] * 3
     
     if layout == "shuffle_rows":
-        # 행 순서만 랜덤 (예: 딜딜딜탱탱탱힐힐힐)
         rows = [["tank"] * 3, ["dps"] * 3, ["support"] * 3]
         random.shuffle(rows)
         return rows[0] + rows[1] + rows[2]
 
-    # default = random (완전 랜덤)
+    # default = random
     target = ["tank"] * 3 + ["dps"] * 3 + ["support"] * 3
     random.shuffle(target)
     return target
@@ -79,22 +76,82 @@ def get_adjacent_indices(index: int) -> List[int]:
     adjacent = []
     
     if row > 0:
-        adjacent.append(index - 3)  # 상
+        adjacent.append(index - 3)
     if row < 2:
-        adjacent.append(index + 3)  # 하
+        adjacent.append(index + 3)
     if col > 0:
-        adjacent.append(index - 1)  # 좌
+        adjacent.append(index - 1)
     if col < 2:
-        adjacent.append(index + 1)  # 우
+        adjacent.append(index + 1)
     
     return adjacent
 
+
+# ──────────────────────────────────────────────
+#  역할 기반 상태 함수 (BFS 최적화용)
+# ──────────────────────────────────────────────
+
+def _hero_state_to_role_state(
+    state: Tuple[Optional[str], ...],
+) -> Tuple[Optional[str], ...]:
+    """
+    영웅 ID 기반 상태 → 역할 기반 상태로 변환
+
+    같은 역할의 영웅은 서로 교환 가능하므로,
+    역할 기반 상태로 축소하면 탐색 공간이 대폭 줄어든다.
+
+    예: ("reinhardt", "genji", None, ...) → ("tank", "dps", None, ...)
+    """
+    return tuple(
+        HEROES[h]["role"] if h is not None else None
+        for h in state
+    )
+
+
+def _role_state_is_solved(
+    role_state: Tuple[Optional[str], ...],
+    target_roles: List[str],
+) -> bool:
+    """역할 기반 상태가 정답인지 확인 (빈 칸 제외)"""
+    for i, role in enumerate(role_state):
+        if role is None:
+            continue
+        if role != target_roles[i]:
+            return False
+    return True
+
+
+def _get_role_neighbors(
+    role_state: Tuple[Optional[str], ...],
+) -> List[Tuple[Optional[str], ...]]:
+    """역할 기반 상태에서 빈 칸과 인접 타일을 스왑한 이웃 상태들 반환"""
+    empty_idx = -1
+    for i, val in enumerate(role_state):
+        if val is None:
+            empty_idx = i
+            break
+
+    if empty_idx == -1:
+        return []
+
+    neighbors = []
+    for adj_idx in get_adjacent_indices(empty_idx):
+        state_list = list(role_state)
+        state_list[empty_idx], state_list[adj_idx] = state_list[adj_idx], state_list[empty_idx]
+        neighbors.append(tuple(state_list))
+
+    return neighbors
+
+
+# ──────────────────────────────────────────────
+#  영웅 ID 기반 함수 (프론트엔드 정답 판별용 유지)
+# ──────────────────────────────────────────────
 
 def is_solved(state: Tuple[Optional[str], ...], target_roles: List[str]) -> bool:
     """현재 상태가 정답인지 확인 (빈 칸 제외하고 역할 매칭)"""
     for i, hero in enumerate(state):
         if hero is None:
-            continue  # 빈 칸은 체크 안 함
+            continue
         if HEROES[hero]["role"] != target_roles[i]:
             return False
     return True
@@ -123,41 +180,36 @@ def get_neighbors(state: Tuple[Optional[str], ...]) -> List[Tuple[Tuple[Optional
     return neighbors
 
 
-def is_solvable(state: List[Optional[str]], target_roles: List[str]) -> bool:
-    """
-    슬라이딩 퍼즐이 풀 수 있는지 확인 (inversion count 기반)
-    
-    3x3 퍼즐에서:
-    - 역할 기준으로 inversion 계산
-    - 짝수면 풀 수 있음
-    """
-    tiles = [h for h in state if h is not None]
-    role_order = {"tank": 0, "dps": 1, "support": 2}
-    
-    inversions = 0
-    for i in range(len(tiles)):
-        for j in range(i + 1, len(tiles)):
-            role_i = HEROES[tiles[i]]["role"]
-            role_j = HEROES[tiles[j]]["role"]
-            if role_order[role_i] > role_order[role_j]:
-                inversions += 1
-    
-    return inversions % 2 == 0
-
+# ──────────────────────────────────────────────
+#  최적해 계산 (역할 기반 BFS)
+# ──────────────────────────────────────────────
 
 def calculate_optimal_moves(
     initial_state: List[Optional[str]],
     target_roles: List[str],
     depth_limit: int = 50,
 ) -> Optional[int]:
-    """BFS로 최적해(최소 이동 횟수) 계산"""
-    initial = tuple(initial_state)
+    """
+    역할 기반 BFS로 최적해(최소 이동 횟수) 계산
 
-    if is_solved(initial, target_roles):
+    [최적화 핵심]
+    영웅 ID 대신 역할(role)로 상태를 추상화하여 탐색한다.
+    - 영웅 ID 기반: 최대 9! / 2 = 181,440 상태
+    - 역할 기반:   9! / (3!×3!×3!) × 빈칸위치 ≈ 5,040 상태
+
+    같은 역할 영웅끼리는 교환해도 정답 여부가 바뀌지 않으므로
+    역할 기반 탐색이 정확하면서도 훨씬 빠르다.
+
+    또한 이 함수가 None을 반환하면 "풀 수 없는 배치"이므로,
+    별도의 is_solvable 함수가 필요 없다.
+    """
+    role_state = _hero_state_to_role_state(tuple(initial_state))
+
+    if _role_state_is_solved(role_state, target_roles):
         return 0
 
-    queue = deque([(initial, 0)])
-    visited = {initial}
+    queue = deque([(role_state, 0)])
+    visited = {role_state}
 
     while queue:
         state, moves = queue.popleft()
@@ -165,11 +217,11 @@ def calculate_optimal_moves(
         if moves >= depth_limit:
             continue
 
-        for new_state, _ in get_neighbors(state):
+        for new_state in _get_role_neighbors(state):
             if new_state in visited:
                 continue
 
-            if is_solved(new_state, target_roles):
+            if _role_state_is_solved(new_state, target_roles):
                 return moves + 1
 
             visited.add(new_state)
@@ -177,6 +229,10 @@ def calculate_optimal_moves(
 
     return None
 
+
+# ──────────────────────────────────────────────
+#  퍼즐 생성
+# ──────────────────────────────────────────────
 
 def generate_puzzle(
     *,
@@ -188,6 +244,20 @@ def generate_puzzle(
 ) -> Dict[str, Any]:
     """
     슬라이딩 퍼즐 생성
+
+    [생성 방식]
+    1) 목표 역할 배열(target_roles)을 layout에 따라 생성
+    2) 최대 max_attempts번 반복하며:
+       a) 영웅 8명 랜덤 선택 + 빈 칸 → 9칸 셔플 배치
+       b) 이미 정답이면 스킵
+       c) 역할 기반 BFS로 최적해 계산 (풀 수 없으면 None → 스킵)
+       d) 난이도 범위 [min_optimal, max_optimal]에 맞으면 반환
+    3) 범위를 만족하지 못하면 가장 어려웠던 퍼즐을 fallback 반환
+
+    [기존 is_solvable 제거 이유]
+    역할 중복이 있는 퍼즐에서 단순 inversion count는 부정확하다.
+    역할 기반 BFS의 상태 공간이 ~5,040개로 충분히 작으므로,
+    BFS 결과(None 여부)로 풀 수 있는지를 직접 판별한다.
     
     Returns:
         {
@@ -217,12 +287,8 @@ def generate_puzzle(
         # 이미 정답이면 스킵
         if is_solved(tuple(initial_state), target_roles):
             continue
-        
-        # 풀 수 있는지 확인
-        if not is_solvable(initial_state, target_roles):
-            continue
 
-        # 최적해 계산
+        # 역할 기반 BFS로 최적해 계산 (풀 수 없으면 None)
         optimal = calculate_optimal_moves(initial_state, target_roles, depth_limit=depth_limit)
         if optimal is None:
             continue
@@ -300,3 +366,5 @@ if __name__ == "__main__":
     print(f"초기 배치: {p['initial_state']}")
     print(f"목표 역할: {p['target_roles']}")
     print(f"영웅 수: {len(p['heroes'])}명")
+    if "warning" in p:
+        print(f"⚠️ 경고: {p['warning']}")
