@@ -32,6 +32,7 @@ export const api = {
           moves: moves
         })
       });
+      if (!response.ok) return null;
       return await response.json();
     } catch (error) {
       console.error('결과 제출 실패:', error);
