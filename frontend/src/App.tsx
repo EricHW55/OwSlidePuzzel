@@ -182,7 +182,10 @@ const App: React.FC = () => {
   // 다시 하기
   const retryGame = async (): Promise<void> => {
     setShowResultModal(false);
+    setScreen('loading');
+
     await initPuzzle(gameMode);
+    setScreen('game');
   };
 
   // 키보드 이벤트 (닉네임 입력)
@@ -216,7 +219,13 @@ const App: React.FC = () => {
         {screen === "loading" && (
             <div className="screen active">
               <div className="loading-wrap">
-                <OverwatchLogoIcon size={140} />
+                {/*<OverwatchLogoIcon size={140} />*/}
+                <img
+                    src="/icon2.png"
+                    alt="앱 아이콘"
+                    style={{ width: 170, height: 170 }}
+                    draggable={false}
+                />
                 <div className="loading-title">매칭 중…</div>
                 <div className="loading-sub">퍼즐 준비하는 중</div>
 
