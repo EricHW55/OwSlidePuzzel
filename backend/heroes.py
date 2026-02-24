@@ -172,45 +172,54 @@ def get_random_heroes(count: int = 8) -> list:
 def get_random_heroes_for_hard() -> dict:
     """
     하드모드용 영웅 선택
-    
+
     1) 세부역할 9개 선택 (탱커3 + 딜러4중3 + 힐러3)
-    2) 각 세부역할에서 영웅 1명씩 = 9명
-    3) 9명 중 1명 블라인드(제거) → 8명 + 빈칸
-    
+    2) 9개 중 1개를 상위 기본역할(tank/dps/support)로 변환
+    3) 각 세부역할에서 영웅 1명씩 = 9명
+    4) 9명 중 1명 블라인드(제거) → 8명 + 빈칸
+
     Returns:
         {
             "heroes": list[8],           # 퍼즐에 쓸 영웅 8명
-            "target_sub_roles": list[9],  # 목표 배치 (세부역할 9개)
-            "blinded_hero": str,          # 제거된 영웅
-            "blinded_sub_role": str,      # 제거된 영웅의 세부역할
+            "target_sub_roles": list[9],  # 목표 배치 (세부역할 8개 + 기본역할 1개)
         }
     """
     import random
-    
+
     # 1) 세부역할 9개 선택
     tank_subs = ["initiator", "bruiser", "stalwart"]  # 3개 전부
     dps_subs = random.sample(["specialist", "recon", "flanker", "sharpshooter"], 3)  # 4개 중 3개
     support_subs = ["tactician", "medic", "survivor"]  # 3개 전부
-    
+
     selected_sub_roles = tank_subs + dps_subs + support_subs  # 9개
+
+    # 2) 9개 중 1개를 상위 기본역할로 변환
+    upgrade_idx = random.randint(0, 8)
+    original_sub = selected_sub_roles[upgrade_idx]
+    parent_role = SUB_ROLES[original_sub]["parent_role"]  # tank, dps, support
+    selected_sub_roles[upgrade_idx] = parent_role
+
     random.shuffle(selected_sub_roles)
-    
-    # 2) 각 세부역할에서 영웅 1명씩 = 9명
+
+    # 3) 각 역할에서 영웅 1명씩 = 9명
     heroes_9 = []
     for sr in selected_sub_roles:
-        candidates = get_heroes_by_sub_role(sr)
+        if sr in ("tank", "dps", "support"):
+            # 기본역할 칸: 해당 role 전체에서 뽑기
+            candidates = get_heroes_by_role(sr)
+        else:
+            # 세부역할 칸: 해당 sub_role에서 뽑기
+            candidates = get_heroes_by_sub_role(sr)
         heroes_9.append(random.choice(candidates))
-    
-    # 3) 9명 중 1명 블라인드 → 8명
-    blind_idx = random.randint(0, 8)
-    blinded_hero = heroes_9[blind_idx]
-    blinded_sub_role = selected_sub_roles[blind_idx]
-    
+
+    # 4) 9명 중 1명 블라인드 → 8명
+    #    (기본역할 칸이 아닌 세부역할 칸에서만 블라인드)
+    blind_candidates = [i for i in range(9) if selected_sub_roles[i] not in ("tank", "dps", "support")]
+    blind_idx = random.choice(blind_candidates)
+
     heroes_8 = [h for i, h in enumerate(heroes_9) if i != blind_idx]
-    
+
     return {
         "heroes": heroes_8,
         "target_sub_roles": selected_sub_roles,
-        "blinded_hero": blinded_hero,
-        "blinded_sub_role": blinded_sub_role,
     }

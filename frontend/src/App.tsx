@@ -1,13 +1,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import TriangleBackground from './components/TriangleBackground';
-import RoleIcon from './components/icon/RoleIcon';
 import OverwatchLogoIcon from './components/icon/OverwatchLogoIcon';
 import { useTimer } from './hooks/useTimer';
 import { api, generateLocalResult } from './hooks/useApi';
 import { ROLES, ALL_ROLES, SUB_ROLE_PARENT, isBasicRole } from './data/heroes';
 import { GameState, GameMode, Screen, Role, SubmitResult, RankingRecord, Hero } from './types';
 import './styles/index.css';
-import { getHeroImageSrc } from "./utils/heroImage";
+import { getHeroImageSrc, getRoleIconSrc } from "./utils/heroImage";
 
 
 const App: React.FC = () => {
@@ -343,17 +342,24 @@ const App: React.FC = () => {
                 <div>
                   <div className="puzzle-label">목표 배치</div>
                   <div className="puzzle-grid">
-                    {targetRoles.map((role, index) => (
-                        <div
-                            key={index}
-                            className={`role-slot ${getParentRole(role)} ${!isBasicRole(role) ? 'sub-role' : ''}`}
-                        >
-                          <RoleIcon role={getParentRole(role)} size={gameMode === 'hard' ? 28 : 36} />
-                          <span className={`role-name ${gameMode === 'hard' ? 'small' : ''}`}>
-                                            {getRoleName(role)}
-                                        </span>
-                        </div>
-                    ))}
+                    {targetRoles.map((role, index) => {
+                      const iconSize = isBasicRole(role) ? 44 : 56;
+                      return (
+                          <div
+                              key={index}
+                              className={`role-slot ${getParentRole(role)} ${!isBasicRole(role) ? 'sub-role' : ''}`}
+                          >
+                            <img
+                                className="role-icon-img"
+                                src={getRoleIconSrc(role)}
+                                alt={getRoleName(role)}
+                                title={getRoleName(role)}
+                                draggable={false}
+                                style={{ width: iconSize, height: iconSize }}
+                            />
+                          </div>
+                      );
+                    })}
                   </div>
                 </div>
 

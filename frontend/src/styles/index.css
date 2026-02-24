@@ -403,3 +403,10 @@ body {
     font-size: 10px;
     letter-spacing: -0.3px;
 }
+
+/* ═══ 역할 아이콘 이미지 ═══ */
+
+.role-icon-img {
+    object-fit: contain;
+    pointer-events: none;
+}
