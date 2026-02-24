@@ -223,7 +223,7 @@ const App: React.FC = () => {
                 <img
                     src="/icon2.png"
                     alt="앱 아이콘"
-                    style={{ width: 170, height: 170 }}
+                    style={{ width: 160, height: 160 }}
                     draggable={false}
                 />
                 <div className="loading-title">매칭 중…</div>
