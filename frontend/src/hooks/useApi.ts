@@ -13,6 +13,7 @@ export const api = {
   async createPuzzle(mode: GameMode): Promise<PuzzleResponse | null> {
     try {
       const response = await fetch(`${API_BASE}/api/puzzle/new?mode=${mode}`);
+      if (!response.ok) return null;
       return await response.json();
     } catch (error) {
       console.error('퍼즐 생성 실패:', error);
@@ -29,8 +30,8 @@ export const api = {
         body: JSON.stringify({
           puzzle_id: puzzleId,
           time_ms: timeMs,
-          moves: moves
-        })
+          moves: moves,
+        }),
       });
       if (!response.ok) return null;
       return await response.json();
@@ -45,7 +46,7 @@ export const api = {
       puzzleId: string,
       timeMs: number,
       moves: number,
-      nickname: string
+      nickname: string,
   ): Promise<SubmitRankingResponse | null> {
     try {
       const response = await fetch(`${API_BASE}/api/ranking/submit`, {
@@ -55,9 +56,10 @@ export const api = {
           puzzle_id: puzzleId,
           time_ms: timeMs,
           moves: moves,
-          nickname: nickname
-        })
+          nickname: nickname,
+        }),
       });
+      if (!response.ok) return null;
       return await response.json();
     } catch (error) {
       console.error('랭킹 등록 실패:', error);
@@ -65,16 +67,17 @@ export const api = {
     }
   },
 
-  // 랭킹 조회
-  async getRankings(limit: number = 10): Promise<RankingResponse> {
+  // 랭킹 조회 (모드별)
+  async getRankings(limit: number = 10, mode: string = 'ranked'): Promise<RankingResponse> {
     try {
-      const response = await fetch(`${API_BASE}/api/ranking?limit=${limit}`);
+      const response = await fetch(`${API_BASE}/api/ranking?limit=${limit}&mode=${mode}`);
+      if (!response.ok) return { total_records: 0, rankings: [] };
       return await response.json();
     } catch (error) {
       console.error('랭킹 조회 실패:', error);
       return { total_records: 0, rankings: [] };
     }
-  }
+  },
 };
 
 // 로컬 결과 생성 (오프라인용)
@@ -99,6 +102,6 @@ export const generateLocalResult = (moves: number, isRanked: boolean): SubmitRes
     grade: grade,
     is_rank_worthy: isRanked,
     current_rank: isRanked ? 1 : null,
-    needs_nickname: isRanked
+    needs_nickname: isRanked,
   };
 };

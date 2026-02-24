@@ -4,8 +4,8 @@ import RoleIcon from './components/icon/RoleIcon';
 import OverwatchLogoIcon from './components/icon/OverwatchLogoIcon';
 import { useTimer } from './hooks/useTimer';
 import { api, generateLocalResult } from './hooks/useApi';
-import { ROLES } from './data/heroes';
-import { GameState, GameMode, Screen, Role, SubmitResult, RankingRecord } from './types';
+import { ROLES, ALL_ROLES, SUB_ROLE_PARENT, isBasicRole } from './data/heroes';
+import { GameState, GameMode, Screen, Role, SubmitResult, RankingRecord, Hero } from './types';
 import './styles/index.css';
 import { getHeroImageSrc } from "./utils/heroImage";
 
@@ -15,16 +15,19 @@ const App: React.FC = () => {
   const [screen, setScreen] = useState<Screen>('menu');
   const [gameMode, setGameMode] = useState<GameMode>('quick');
 
+  // 하드모드 토글
+  const [isHardMode, setIsHardMode] = useState<boolean>(false);
+
   // 게임 상태
   const [gameState, setGameState] = useState<GameState>('idle');
-  const [targetRoles, setTargetRoles] = useState<Role[]>([]);
+  const [targetRoles, setTargetRoles] = useState<string[]>([]);
   const [puzzleTiles, setPuzzleTiles] = useState<(string | null)[]>([]);
   const [emptyIndex, setEmptyIndex] = useState<number>(8);
   const [moves, setMoves] = useState<number>(0);
   const [puzzleId, setPuzzleId] = useState<string>('');
 
   // 서버에서 받은 영웅 정보
-  const [heroesData, setHeroesData] = useState<Record<string, { name_ko: string; role: Role }>>({});
+  const [heroesData, setHeroesData] = useState<Record<string, Hero>>({});
 
   // 타이머
   const { time, formattedTime, start: startTimer, stop: stopTimer, reset: resetTimer, formatTime } = useTimer();
@@ -37,21 +40,48 @@ const App: React.FC = () => {
   const [nickname, setNickname] = useState<string>('');
   const [rankings, setRankings] = useState<RankingRecord[]>([]);
 
-  // 정답 확인
-  const checkSolved = useCallback((tiles: (string | null)[], roles: Role[], heroes: Record<string, { role: Role }>): boolean => {
+  // 정답 확인 - 기본 + 하드 모드 통합
+  const checkSolved = useCallback((
+      tiles: (string | null)[],
+      roles: string[],
+      heroes: Record<string, Hero>,
+  ): boolean => {
     for (let i = 0; i < 9; i++) {
       const tile = tiles[i];
       if (tile === null) continue;
-      if (!heroes[tile]) continue;
-      if (heroes[tile].role !== roles[i]) return false;
+
+      const hero = heroes[tile];
+      if (!hero) continue;
+
+      const target = roles[i];
+
+      if (isBasicRole(target)) {
+        // 기본역할 칸: role로 판정
+        if (hero.role !== target) return false;
+      } else {
+        // 세부역할 칸: sub_role로 판정
+        if (hero.sub_role !== target) return false;
+      }
     }
     return true;
   }, []);
 
+  // 타일이 현재 위치에 맞는지 확인 (녹색 표시용)
+  const isTileCorrect = useCallback((heroId: string, targetRole: string): boolean => {
+    const hero = heroesData[heroId];
+    if (!hero) return false;
+
+    if (isBasicRole(targetRole)) {
+      return hero.role === targetRole;
+    } else {
+      return hero.sub_role === targetRole;
+    }
+  }, [heroesData]);
+
   // 퍼즐 초기화
   const initPuzzle = useCallback(async (mode: GameMode): Promise<void> => {
-    stopTimer();      // 혹시 돌고 있던 타이머 정지
-    resetTimer();     // 0으로 초기화
+    stopTimer();
+    resetTimer();
     setGameState('idle');
     setMoves(0);
 
@@ -69,7 +99,6 @@ const App: React.FC = () => {
 
     setGameState('playing');
 
-    // ✅ 화면에 퍼즐이 실제로 그려진 다음 타이머 시작
     requestAnimationFrame(() => {
       startTimer();
     });
@@ -87,13 +116,6 @@ const App: React.FC = () => {
     if (!isAdjacent(index, emptyIndex)) return;
     if (gameState === 'completed') return;
 
-    // // 첫 이동 시 게임 시작
-    // if (gameState === 'idle') {
-    //   setGameState('playing');
-    //   startTimer();
-    // }
-
-    // 타일 스왑
     const newTiles = [...puzzleTiles];
     newTiles[emptyIndex] = newTiles[index];
     newTiles[index] = null;
@@ -102,7 +124,6 @@ const App: React.FC = () => {
     setEmptyIndex(index);
     setMoves(prev => prev + 1);
 
-    // 정답 확인
     if (checkSolved(newTiles, targetRoles, heroesData)) {
       setGameState('completed');
       stopTimer();
@@ -113,7 +134,7 @@ const App: React.FC = () => {
   const handleGameComplete = useCallback(async (): Promise<void> => {
     let resultData: SubmitResult;
 
-    if (gameMode === 'ranked') {
+    if (gameMode === 'ranked' || gameMode === 'hard') {
       const response = await api.submitResult(puzzleId, time, moves);
       resultData = response || generateLocalResult(moves, true);
     } else {
@@ -123,8 +144,8 @@ const App: React.FC = () => {
     setResult(resultData);
     setShowResultModal(true);
 
-    // 랭킹전이고 랭킹권이면 닉네임 입력
-    if (gameMode === 'ranked' && resultData.is_rank_worthy) {
+    // 랭킹전/하드모드이고 랭킹권이면 닉네임 입력
+    if ((gameMode === 'ranked' || gameMode === 'hard') && resultData.is_rank_worthy) {
       setTimeout(() => {
         setShowResultModal(false);
         setShowNicknameModal(true);
@@ -167,9 +188,10 @@ const App: React.FC = () => {
     setShowRankingModal(true);
   };
 
-  // 랭킹 조회
+  // 랭킹 조회 (모드별)
   const fetchRankings = async (): Promise<void> => {
-    const data = await api.getRankings(10);
+    const mode = isHardMode ? 'hard' : 'ranked';
+    const data = await api.getRankings(10, mode);
     setRankings(data.rankings || []);
   };
 
@@ -195,31 +217,79 @@ const App: React.FC = () => {
     }
   };
 
+  // 게임 모드 라벨
+  const getGameModeLabel = (): string => {
+    if (gameMode === 'hard') return '하드모드';
+    if (gameMode === 'ranked') return '경쟁전';
+    return '일반전';
+  };
+
+  // 역할 이름 가져오기 (기본 + 세부 통합)
+  const getRoleName = (role: string): string => {
+    return ALL_ROLES[role]?.name || role;
+  };
+
+  // 역할의 상위 기본역할 가져오기 (아이콘 표시용)
+  const getParentRole = (role: string): Role => {
+    if (isBasicRole(role)) return role;
+    return SUB_ROLE_PARENT[role as keyof typeof SUB_ROLE_PARENT] || 'tank';
+  };
+
   return (
-      <div className="app">
+      <div className={`app ${isHardMode ? 'hard-mode' : ''}`}>
         <TriangleBackground />
 
         {/* 메인 메뉴 */}
         {screen === 'menu' && (
             <div className="screen active">
+              {/* 하드모드 토글 스위치 */}
+              <div className="hard-mode-toggle">
+                <span className="toggle-label">하드모드</span>
+                <label className="toggle-switch">
+                  <input
+                      type="checkbox"
+                      checked={isHardMode}
+                      onChange={e => setIsHardMode(e.target.checked)}
+                  />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
+
               <div className="menu-logo">
                 <OverwatchLogoIcon size={160} />
                 <div className="menu-title">OVERWATCH</div>
-                <div className="menu-subtitle">ROLE PUZZLE</div>
+                <div className="menu-subtitle">
+                  {isHardMode ? 'HARD PUZZLE' : 'ROLE PUZZLE'}
+                </div>
               </div>
               <div className="menu-buttons">
-                <button className="menu-btn primary" onClick={() => startGame('quick')}>일반전</button>
-                <button className="menu-btn primary" onClick={() => startGame('ranked')}>경쟁전</button>
-                <button className="menu-btn secondary" onClick={showRanking}>랭킹 보기</button>
+                {isHardMode ? (
+                    <>
+                      <button className="menu-btn primary hard" onClick={() => startGame('hard')}>
+                        하드모드 시작
+                      </button>
+                    </>
+                ) : (
+                    <>
+                      <button className="menu-btn primary" onClick={() => startGame('quick')}>
+                        일반전
+                      </button>
+                      <button className="menu-btn primary" onClick={() => startGame('ranked')}>
+                        경쟁전
+                      </button>
+                    </>
+                )}
+                <button className="menu-btn secondary" onClick={showRanking}>
+                  {isHardMode ? '하드 랭킹' : '랭킹 보기'}
+                </button>
               </div>
             </div>
         )}
 
-        {/*로딩 화면*/}
+        {/* 로딩 화면 */}
         {screen === "loading" && (
             <div className="screen active">
               <div className="loading-wrap">
-                {/*<OverwatchLogoIcon size={140} />*/}
                 <img
                     src="/icon2.png"
                     alt="앱 아이콘"
@@ -252,7 +322,9 @@ const App: React.FC = () => {
                   </svg>
                   나가기
                 </button>
-                <span className="game-mode-label">{gameMode === 'ranked' ? '경쟁전' : '일반전'}</span>
+                <span className={`game-mode-label ${gameMode === 'hard' ? 'hard' : ''}`}>
+                            {getGameModeLabel()}
+                        </span>
               </div>
 
               <div className="game-stats">
@@ -267,20 +339,25 @@ const App: React.FC = () => {
               </div>
 
               <div className="puzzle-area">
-                {/* 목표 배치 (9칸 꽉 참) */}
+                {/* 목표 배치 */}
                 <div>
                   <div className="puzzle-label">목표 배치</div>
                   <div className="puzzle-grid">
                     {targetRoles.map((role, index) => (
-                        <div key={index} className={`role-slot ${role}`}>
-                          <RoleIcon role={role} size={36} />
-                          <span className="role-name">{ROLES[role].name}</span>
+                        <div
+                            key={index}
+                            className={`role-slot ${getParentRole(role)} ${!isBasicRole(role) ? 'sub-role' : ''}`}
+                        >
+                          <RoleIcon role={getParentRole(role)} size={gameMode === 'hard' ? 28 : 36} />
+                          <span className={`role-name ${gameMode === 'hard' ? 'small' : ''}`}>
+                                            {getRoleName(role)}
+                                        </span>
                         </div>
                     ))}
                   </div>
                 </div>
 
-                {/* 슬라이딩 퍼즐 (8개 영웅 + 1개 빈 칸) */}
+                {/* 슬라이딩 퍼즐 */}
                 <div>
                   <div className="puzzle-label">슬라이딩 퍼즐</div>
                   <div className="puzzle-grid">
@@ -294,7 +371,7 @@ const App: React.FC = () => {
                         return <div key={index} className="hero-tile empty" />;
                       }
 
-                      const isCorrect = hero.role === targetRoles[index];
+                      const isCorrect = isTileCorrect(heroId, targetRoles[index]);
                       const isMovable = isAdjacent(index, emptyIndex);
 
                       return (
@@ -349,7 +426,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <div className={`grade ${result.grade.toLowerCase().replace(' ', '-')}`}>{result.grade}</div>
-                {gameMode === 'ranked' && result.is_rank_worthy && (
+                {(gameMode === 'ranked' || gameMode === 'hard') && result.is_rank_worthy && (
                     <div className="rank-badge">🏆 {result.current_rank}위!</div>
                 )}
                 <div>
@@ -390,7 +467,9 @@ const App: React.FC = () => {
         {showRankingModal && (
             <div className="modal-overlay active" onClick={() => setShowRankingModal(false)}>
               <div className="modal ranking-modal" onClick={e => e.stopPropagation()}>
-                <h2 className="modal-title">🏆 TOP 10</h2>
+                <h2 className="modal-title">
+                  🏆 {isHardMode ? 'HARD' : ''} TOP 10
+                </h2>
                 <div className="ranking-list">
                   {rankings.length === 0 ? (
                       <p className="no-ranking">기록이 없습니다</p>
