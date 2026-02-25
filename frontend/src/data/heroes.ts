@@ -127,3 +127,20 @@ export const getHero = (heroId: string): Hero | undefined => {
 export const getRole = (role: Role): RoleInfo => {
   return ROLES[role];
 };
+
+// 세부역할별 영웅 목록 (사전 모달용)
+export const SUB_ROLE_GROUPS: { parent: Role; subRole: string; name: string; heroes: string[] }[] = [
+  // 탱커
+  { parent: 'tank', subRole: 'initiator', name: '개시자', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'initiator') },
+  { parent: 'tank', subRole: 'bruiser', name: '투사', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'bruiser') },
+  { parent: 'tank', subRole: 'stalwart', name: '강건한 자', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'stalwart') },
+  // 딜러
+  { parent: 'dps', subRole: 'specialist', name: '전문가', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'specialist') },
+  { parent: 'dps', subRole: 'recon', name: '수색가', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'recon') },
+  { parent: 'dps', subRole: 'flanker', name: '측면 공격가', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'flanker') },
+  { parent: 'dps', subRole: 'sharpshooter', name: '명사수', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'sharpshooter') },
+  // 힐러
+  { parent: 'support', subRole: 'tactician', name: '전술가', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'tactician') },
+  { parent: 'support', subRole: 'medic', name: '의무관', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'medic') },
+  { parent: 'support', subRole: 'survivor', name: '생존왕', heroes: Object.keys(HEROES).filter(h => HEROES[h].sub_role === 'survivor') },
+];

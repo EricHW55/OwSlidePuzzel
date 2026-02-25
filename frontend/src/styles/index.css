@@ -356,7 +356,7 @@ body {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: #c0392b;
+    background-color: #9b3ab5;
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -365,38 +365,46 @@ body {
 }
 
 
-/* ═══ 하드모드 배경색 변경 ═══ */
-
-.app.hard-mode {
-    background: linear-gradient(135deg, #1a0a0a 0%, #2d1515 50%, #1a0a0a 100%);
-}
+/* ═══ 하드모드 배경색: TriangleBackground 컴포넌트에서 처리 ═══ */
 
 
 /* ═══ 하드모드 버튼 스타일 ═══ */
 
 .menu-btn.primary.hard {
-    background: linear-gradient(135deg, #c0392b, #e74c3c);
-    border-color: #e74c3c;
+    background: linear-gradient(135deg, #7b2d8e, #9b3ab5);
+    border-color: #9b3ab5;
 }
 
 .menu-btn.primary.hard:hover {
-    background: linear-gradient(135deg, #e74c3c, #ff6b6b);
-    border-color: #ff6b6b;
+    background: linear-gradient(135deg, #9b3ab5, #b84fd4);
+    border-color: #b84fd4;
+    box-shadow: 0 0 25px rgba(155, 58, 181, 0.5);
 }
 
 
 /* ═══ 하드모드 게임 모드 라벨 ═══ */
 
 .game-mode-label.hard {
-    color: #e74c3c;
-    border-color: #e74c3c;
+    color: #b84fd4;
+    border-color: #b84fd4;
 }
 
 
 /* ═══ 세부역할 슬롯 스타일 ═══ */
 
 .role-slot.sub-role {
-    border: 1px solid rgba(231, 76, 60, 0.4);
+    border: 1px solid rgba(155, 58, 181, 0.4);
+}
+
+/* 하드모드: 역할 배경색 제거 → 통일된 어두운 스타일 */
+.app.hard-mode .role-slot {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app.hard-mode .role-slot.sub-role {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 .role-name.small {
@@ -409,4 +417,118 @@ body {
 .role-icon-img {
     object-fit: contain;
     pointer-events: none;
+}
+
+/* ═══ 역할군 보기 버튼 ═══ */
+
+.menu-btn.secondary.dict {
+    background: rgba(155, 58, 181, 0.15);
+    border-color: rgba(155, 58, 181, 0.5);
+    /*font-size: 1rem;*/
+}
+
+.menu-btn.secondary.dict:hover {
+    background: rgba(155, 58, 181, 0.3);
+    border-color: rgba(184, 79, 212, 0.7);
+}
+
+/* ═══ 역할군 사전 모달 ═══ */
+
+.dict-modal {
+    max-width: 500px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dict-content {
+    overflow-y: auto;
+    max-height: 60vh;
+    padding-right: 5px;
+    margin-bottom: 15px;
+}
+
+.dict-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.dict-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.dict-section {
+    margin-bottom: 18px;
+}
+
+.dict-parent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.dict-parent-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.dict-group {
+    margin-left: 8px;
+    margin-bottom: 10px;
+}
+
+.dict-sub-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #b8a0d0;
+    margin-bottom: 6px;
+}
+
+.dict-sub-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.dict-heroes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-left: 10px;
+}
+
+.dict-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 62px;
+}
+
+.dict-hero-img {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dict-hero-name {
+    font-size: 0.60rem;
+    color: #a0b0c0;
+    text-align: center;
+    line-height: 1.2;
+    word-break: keep-all;
 }

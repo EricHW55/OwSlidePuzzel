@@ -326,21 +326,24 @@ def generate_puzzle_hard(
     *,
     min_optimal: int = 5,
     max_optimal: int = 25,
-    max_attempts: int = 500,
+    shuffle_moves: int = 200,
+    max_attempts: int = 30,
     depth_limit: int = 50,
 ) -> Dict[str, Any]:
     """
-    하드 모드 퍼즐 생성
+    하드 모드 퍼즐 생성 (역방향 셔플 방식)
 
-    [생성 방식]
-    1) get_random_heroes_for_hard()로:
-       - 세부역할 9개 선택 (탱3 + 딜3/4 + 힐3)
-       - 1개를 상위 기본역할로 변환
-       - 각 역할에서 영웅 1명씩 = 9명
-       - 1명 블라인드 → 8명
-    2) 8명 + 빈칸 → 셔플
-    3) 세부역할 기반 BFS로 최적해
-    4) 난이도 범위 체크
+    [기존 방식의 문제]
+    하드모드는 세부역할이 거의 고유 → BFS 상태공간 ~181,440개
+    랜덤 배치 + BFS를 500번 반복하면 매우 느림
+
+    [역방향 셔플 방식]
+    1) 정답 상태에서 빈칸을 N번 랜덤 이동 → 문제 생성
+    2) 풀 수 있음 100% 보장 → 스킵 없음
+    3) BFS를 시도당 1번만 실행 → 빠름
+
+    shuffle_moves=200이면 3x3 그리드가 충분히 섞여서
+    최적해가 대부분 15~31 범위에 분포
     """
     best_state = None
     best_optimal = -1
@@ -352,14 +355,31 @@ def generate_puzzle_hard(
 
         selected_heroes = hard_data["heroes"]
         target_roles = hard_data["target_sub_roles"]
+        solved_state = hard_data["solved_state"]
 
-        initial_state: List[Optional[str]] = selected_heroes.copy()
-        initial_state.append(None)
-        random.shuffle(initial_state)
+        # ── 역방향 셔플: 정답에서 빈칸을 N번 랜덤 이동 ──
+        state = list(solved_state)
+        empty_idx = state.index(None)
+        prev_idx = -1  # 직전 위치 (왕복 방지)
 
+        for _ in range(shuffle_moves):
+            adj = get_adjacent_indices(empty_idx)
+            # 직전 위치 제외 → 왕복 없이 효율적 셔플
+            candidates = [a for a in adj if a != prev_idx]
+            if not candidates:
+                candidates = adj
+            next_idx = random.choice(candidates)
+            state[empty_idx], state[next_idx] = state[next_idx], state[empty_idx]
+            prev_idx = empty_idx
+            empty_idx = next_idx
+
+        initial_state = state
+
+        # 이미 정답이면 스킵 (사실상 불가능)
         if is_solved_hard(tuple(initial_state), target_roles):
             continue
 
+        # BFS 1번만 실행
         optimal = calculate_optimal_moves_hard(
             initial_state, target_roles, depth_limit=depth_limit
         )
@@ -374,23 +394,19 @@ def generate_puzzle_hard(
             best_heroes = heroes_info
             best_target = target_roles
 
-        if optimal < min_optimal:
-            continue
-        if max_optimal is not None and optimal > max_optimal:
-            continue
+        if min_optimal <= optimal <= max_optimal:
+            empty_idx = initial_state.index(None)
+            return {
+                "puzzle_id": str(uuid.uuid4()),
+                "initial_state": initial_state,
+                "target_roles": target_roles,
+                "empty_index": empty_idx,
+                "heroes": heroes_info,
+                "optimal_moves": optimal,
+                "mode": "hard",
+            }
 
-        empty_idx = initial_state.index(None)
-
-        return {
-            "puzzle_id": str(uuid.uuid4()),
-            "initial_state": initial_state,
-            "target_roles": target_roles,
-            "empty_index": empty_idx,
-            "heroes": heroes_info,
-            "optimal_moves": optimal,
-            "mode": "hard",
-        }
-
+    # fallback
     if best_state is not None and best_optimal >= 0:
         empty_idx = best_state.index(None)
         return {

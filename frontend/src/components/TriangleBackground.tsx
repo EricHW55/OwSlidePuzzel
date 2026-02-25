@@ -1,29 +1,32 @@
 import React, { useEffect, useRef } from 'react';
 import { Triangle } from '../types';
 
-const TriangleBackground: React.FC = () => {
+interface Props {
+  isHardMode?: boolean;
+}
+
+const TriangleBackground: React.FC<Props> = ({ isHardMode = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trianglesRef = useRef<Triangle[]>([]);
   const animationRef = useRef<number>(0);
+  const isHardRef = useRef(isHardMode);
+
+  // isHardMode 변경 시 삼각형 색상 업데이트
+  useEffect(() => {
+    isHardRef.current = isHardMode;
+
+    // 기존 삼각형 색상만 교체 (재생성 없이)
+    trianglesRef.current.forEach(tri => {
+      tri.color = isHardMode ? getRandomRedColor() : getRandomBlueColor();
+    });
+  }, [isHardMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const getRandomColor = (): { r: number; g: number; b: number } => {
-      const colors = [
-        { r: 42, g: 69, b: 85 },
-        { r: 30, g: 53, b: 69 },
-        { r: 37, g: 58, b: 74 },
-        { r: 26, g: 42, b: 58 },
-        { r: 50, g: 78, b: 95 },
-        { r: 35, g: 62, b: 82 },
-      ];
-      return colors[Math.floor(Math.random() * colors.length)];
-    };
 
     const generateTriangles = (): Triangle[] => {
       const triangles: Triangle[] = [];
@@ -35,25 +38,26 @@ const TriangleBackground: React.FC = () => {
         for (let col = 0; col < cols; col++) {
           const x = col * size + (row % 2) * (size / 2);
           const y = row * size * 0.866;
+          const colorFn = isHardRef.current ? getRandomRedColor : getRandomBlueColor;
 
           triangles.push({
-            x, y, size, 
+            x, y, size,
             pointing: 'up',
             baseAlpha: 0.04 + Math.random() * 0.06,
             alpha: 0.04 + Math.random() * 0.06,
             targetAlpha: 0.04 + Math.random() * 0.06,
             twinkleSpeed: 0.003 + Math.random() * 0.012,
-            color: getRandomColor()
+            color: colorFn()
           });
 
           triangles.push({
-            x: x + size / 2, y, size, 
+            x: x + size / 2, y, size,
             pointing: 'down',
             baseAlpha: 0.04 + Math.random() * 0.06,
             alpha: 0.04 + Math.random() * 0.06,
             targetAlpha: 0.04 + Math.random() * 0.06,
             twinkleSpeed: 0.003 + Math.random() * 0.012,
-            color: getRandomColor()
+            color: colorFn()
           });
         }
       }
@@ -74,7 +78,11 @@ const TriangleBackground: React.FC = () => {
       ctx.closePath();
       ctx.fillStyle = `rgba(${tri.color.r}, ${tri.color.g}, ${tri.color.b}, ${tri.alpha})`;
       ctx.fill();
-      ctx.strokeStyle = `rgba(60, 90, 110, ${tri.alpha * 0.8})`;
+
+      const strokeColor = isHardRef.current
+          ? `rgba(90, 40, 80, ${tri.alpha * 0.8})`
+          : `rgba(60, 90, 110, ${tri.alpha * 0.8})`;
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
       ctx.stroke();
     };
@@ -117,28 +125,59 @@ const TriangleBackground: React.FC = () => {
     };
   }, []);
 
+  const bgGradient = isHardMode
+      ? 'linear-gradient(135deg, #1e0a1e 0%, #2a1028 50%, #180818 100%)'
+      : 'linear-gradient(135deg, #1a2634 0%, #1e3040 50%, #152530 100%)';
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100%',
-      height: '100%',
-      zIndex: 0,
-      background: 'linear-gradient(135deg, #1a2634 0%, #1e3040 50%, #152530 100%)'
-    }}>
-      <canvas 
-        ref={canvasRef} 
-        style={{ 
-          position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
-          height: '100%' 
-        }} 
-      />
-    </div>
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 0,
+        background: bgGradient,
+        transition: 'background 0.5s ease',
+      }}>
+        <canvas
+            ref={canvasRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+            }}
+        />
+      </div>
   );
 };
+
+// ── 색상 팔레트 ──
+
+function getRandomBlueColor(): { r: number; g: number; b: number } {
+  const colors = [
+    { r: 42, g: 69, b: 85 },
+    { r: 30, g: 53, b: 69 },
+    { r: 37, g: 58, b: 74 },
+    { r: 26, g: 42, b: 58 },
+    { r: 50, g: 78, b: 95 },
+    { r: 35, g: 62, b: 82 },
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function getRandomRedColor(): { r: number; g: number; b: number } {
+  const colors = [
+    { r: 75, g: 25, b: 65 },
+    { r: 85, g: 30, b: 55 },
+    { r: 65, g: 20, b: 50 },
+    { r: 90, g: 35, b: 60 },
+    { r: 55, g: 18, b: 45 },
+    { r: 80, g: 28, b: 70 },
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
 
 export default TriangleBackground;
