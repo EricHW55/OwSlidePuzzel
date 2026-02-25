@@ -236,7 +236,7 @@ const App: React.FC = () => {
 
   return (
       <div className={`app ${isHardMode ? 'hard-mode' : ''}`}>
-        <TriangleBackground />
+        <TriangleBackground isHardMode={isHardMode} />
 
         {/* 메인 메뉴 */}
         {screen === 'menu' && (

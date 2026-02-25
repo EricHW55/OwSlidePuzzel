@@ -356,7 +356,7 @@ body {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: #c0392b;
+    background-color: #9b3ab5;
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -365,38 +365,46 @@ body {
 }
 
 
-/* ═══ 하드모드 배경색 변경 ═══ */
-
-.app.hard-mode {
-    background: linear-gradient(135deg, #1a0a0a 0%, #2d1515 50%, #1a0a0a 100%);
-}
+/* ═══ 하드모드 배경색: TriangleBackground 컴포넌트에서 처리 ═══ */
 
 
 /* ═══ 하드모드 버튼 스타일 ═══ */
 
 .menu-btn.primary.hard {
-    background: linear-gradient(135deg, #c0392b, #e74c3c);
-    border-color: #e74c3c;
+    background: linear-gradient(135deg, #7b2d8e, #9b3ab5);
+    border-color: #9b3ab5;
 }
 
 .menu-btn.primary.hard:hover {
-    background: linear-gradient(135deg, #e74c3c, #ff6b6b);
-    border-color: #ff6b6b;
+    background: linear-gradient(135deg, #9b3ab5, #b84fd4);
+    border-color: #b84fd4;
+    box-shadow: 0 0 25px rgba(155, 58, 181, 0.5);
 }
 
 
 /* ═══ 하드모드 게임 모드 라벨 ═══ */
 
 .game-mode-label.hard {
-    color: #e74c3c;
-    border-color: #e74c3c;
+    color: #b84fd4;
+    border-color: #b84fd4;
 }
 
 
 /* ═══ 세부역할 슬롯 스타일 ═══ */
 
 .role-slot.sub-role {
-    border: 1px solid rgba(231, 76, 60, 0.4);
+    border: 1px solid rgba(155, 58, 181, 0.4);
+}
+
+/* 하드모드: 역할 배경색 제거 → 통일된 어두운 스타일 */
+.app.hard-mode .role-slot {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app.hard-mode .role-slot.sub-role {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 .role-name.small {

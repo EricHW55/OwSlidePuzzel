@@ -175,13 +175,14 @@ def get_random_heroes_for_hard() -> dict:
 
     1) 세부역할 9개 선택 (탱커3 + 딜러4중3 + 힐러3)
     2) 9개 중 1개를 상위 기본역할(tank/dps/support)로 변환
-    3) 각 세부역할에서 영웅 1명씩 = 9명
+    3) 각 역할에서 영웅 1명씩 = 9명 (중복 없이)
     4) 9명 중 1명 블라인드(제거) → 8명 + 빈칸
 
     Returns:
         {
             "heroes": list[8],           # 퍼즐에 쓸 영웅 8명
             "target_sub_roles": list[9],  # 목표 배치 (세부역할 8개 + 기본역할 1개)
+            "solved_state": list[9],      # 정답 상태 (역방향 셔플용)
         }
     """
     import random
@@ -201,16 +202,18 @@ def get_random_heroes_for_hard() -> dict:
 
     random.shuffle(selected_sub_roles)
 
-    # 3) 각 역할에서 영웅 1명씩 = 9명
+    # 3) 각 역할에서 영웅 1명씩 = 9명 (중복 없이!)
     heroes_9 = []
+    used_heroes = set()
+
     for sr in selected_sub_roles:
         if sr in ("tank", "dps", "support"):
-            # 기본역할 칸: 해당 role 전체에서 뽑기
-            candidates = get_heroes_by_role(sr)
+            candidates = [h for h in get_heroes_by_role(sr) if h not in used_heroes]
         else:
-            # 세부역할 칸: 해당 sub_role에서 뽑기
-            candidates = get_heroes_by_sub_role(sr)
-        heroes_9.append(random.choice(candidates))
+            candidates = [h for h in get_heroes_by_sub_role(sr) if h not in used_heroes]
+        hero = random.choice(candidates)
+        heroes_9.append(hero)
+        used_heroes.add(hero)
 
     # 4) 9명 중 1명 블라인드 → 8명
     #    (기본역할 칸이 아닌 세부역할 칸에서만 블라인드)
@@ -219,7 +222,12 @@ def get_random_heroes_for_hard() -> dict:
 
     heroes_8 = [h for i, h in enumerate(heroes_9) if i != blind_idx]
 
+    # 정답 상태 (역방향 셔플용)
+    solved_state = list(heroes_9)
+    solved_state[blind_idx] = None
+
     return {
         "heroes": heroes_8,
         "target_sub_roles": selected_sub_roles,
+        "solved_state": solved_state,
     }
