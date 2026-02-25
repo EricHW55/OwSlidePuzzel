@@ -3,7 +3,7 @@ import TriangleBackground from './components/TriangleBackground';
 import OverwatchLogoIcon from './components/icon/OverwatchLogoIcon';
 import { useTimer } from './hooks/useTimer';
 import { api, generateLocalResult } from './hooks/useApi';
-import { ROLES, ALL_ROLES, SUB_ROLE_PARENT, isBasicRole } from './data/heroes';
+import { ROLES, ALL_ROLES, SUB_ROLE_PARENT, isBasicRole, SUB_ROLE_GROUPS, HEROES } from './data/heroes';
 import { GameState, GameMode, Screen, Role, SubmitResult, RankingRecord, Hero } from './types';
 import './styles/index.css';
 import { getHeroImageSrc, getRoleIconSrc } from "./utils/heroImage";
@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [nickname, setNickname] = useState<string>('');
   const [rankings, setRankings] = useState<RankingRecord[]>([]);
+  const [showDictModal, setShowDictModal] = useState<boolean>(false);
 
   // 정답 확인 - 기본 + 하드 모드 통합
   const checkSolved = useCallback((
@@ -174,6 +175,7 @@ const App: React.FC = () => {
     setShowResultModal(false);
     setShowNicknameModal(false);
     setShowRankingModal(false);
+    setShowDictModal(false);
     setScreen('menu');
   };
 
@@ -264,6 +266,9 @@ const App: React.FC = () => {
               <div className="menu-buttons">
                 {isHardMode ? (
                     <>
+                      <button className="menu-btn secondary dict" onClick={() => setShowDictModal(true)}>
+                        역할군 보기
+                      </button>
                       <button className="menu-btn primary hard" onClick={() => startGame('hard')}>
                         하드모드 시작
                       </button>
@@ -491,6 +496,52 @@ const App: React.FC = () => {
                   )}
                 </div>
                 <button className="modal-btn secondary" onClick={() => setShowRankingModal(false)}>닫기</button>
+              </div>
+            </div>
+        )}
+
+        {/* 역할군 사전 모달 */}
+        {showDictModal && (
+            <div className="modal-overlay active" onClick={() => setShowDictModal(false)}>
+              <div className="modal dict-modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">세부 역할군 정보</h2>
+                <div className="dict-content">
+                  {(['tank', 'dps', 'support'] as const).map(parentRole => (
+                      <div key={parentRole} className="dict-section">
+                        <div className="dict-parent-header">
+                          <img src={getRoleIconSrc(parentRole)} alt="" className="dict-parent-icon" />
+                          <span>{ROLES[parentRole].name}</span>
+                        </div>
+                        {SUB_ROLE_GROUPS
+                            .filter(g => g.parent === parentRole)
+                            .map(group => (
+                                <div key={group.subRole} className="dict-group">
+                                  <div className="dict-sub-header">
+                                    <img src={getRoleIconSrc(group.subRole)} alt="" className="dict-sub-icon" />
+                                    <span>{group.name}</span>
+                                  </div>
+                                  <div className="dict-heroes">
+                                    {group.heroes.map(heroId => (
+                                        <div key={heroId} className="dict-hero">
+                                          <img
+                                              src={getHeroImageSrc(heroId)}
+                                              alt={HEROES[heroId]?.name_ko}
+                                              className="dict-hero-img"
+                                              onError={(e) => {
+                                                (e.currentTarget as HTMLImageElement).src = "/heroes/_unknown.png";
+                                              }}
+                                          />
+                                          <span className="dict-hero-name">{HEROES[heroId]?.name_ko}</span>
+                                        </div>
+                                    ))}
+                                  </div>
+                                </div>
+                            ))
+                        }
+                      </div>
+                  ))}
+                </div>
+                <button className="modal-btn secondary" onClick={() => setShowDictModal(false)}>닫기</button>
               </div>
             </div>
         )}

@@ -80,7 +80,7 @@ const TriangleBackground: React.FC<Props> = ({ isHardMode = false }) => {
       ctx.fill();
 
       const strokeColor = isHardRef.current
-          ? `rgba(110, 50, 50, ${tri.alpha * 0.8})`
+          ? `rgba(90, 40, 80, ${tri.alpha * 0.8})`
           : `rgba(60, 90, 110, ${tri.alpha * 0.8})`;
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
@@ -126,7 +126,7 @@ const TriangleBackground: React.FC<Props> = ({ isHardMode = false }) => {
   }, []);
 
   const bgGradient = isHardMode
-      ? 'linear-gradient(135deg, #2a1418 0%, #3a1c22 50%, #1e0e12 100%)'
+      ? 'linear-gradient(135deg, #1e0a1e 0%, #2a1028 50%, #180818 100%)'
       : 'linear-gradient(135deg, #1a2634 0%, #1e3040 50%, #152530 100%)';
 
   return (
@@ -170,12 +170,12 @@ function getRandomBlueColor(): { r: number; g: number; b: number } {
 
 function getRandomRedColor(): { r: number; g: number; b: number } {
   const colors = [
-    { r: 85, g: 35, b: 35 },
-    { r: 70, g: 28, b: 32 },
-    { r: 78, g: 32, b: 38 },
-    { r: 60, g: 24, b: 28 },
-    { r: 95, g: 40, b: 42 },
-    { r: 82, g: 30, b: 35 },
+    { r: 75, g: 25, b: 65 },
+    { r: 85, g: 30, b: 55 },
+    { r: 65, g: 20, b: 50 },
+    { r: 90, g: 35, b: 60 },
+    { r: 55, g: 18, b: 45 },
+    { r: 80, g: 28, b: 70 },
   ];
   return colors[Math.floor(Math.random() * colors.length)];
 }

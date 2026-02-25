@@ -418,3 +418,117 @@ body {
     object-fit: contain;
     pointer-events: none;
 }
+
+/* ═══ 역할군 보기 버튼 ═══ */
+
+.menu-btn.secondary.dict {
+    background: rgba(155, 58, 181, 0.15);
+    border-color: rgba(155, 58, 181, 0.5);
+    /*font-size: 1rem;*/
+}
+
+.menu-btn.secondary.dict:hover {
+    background: rgba(155, 58, 181, 0.3);
+    border-color: rgba(184, 79, 212, 0.7);
+}
+
+/* ═══ 역할군 사전 모달 ═══ */
+
+.dict-modal {
+    max-width: 500px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dict-content {
+    overflow-y: auto;
+    max-height: 60vh;
+    padding-right: 5px;
+    margin-bottom: 15px;
+}
+
+.dict-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.dict-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.dict-section {
+    margin-bottom: 18px;
+}
+
+.dict-parent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.dict-parent-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.dict-group {
+    margin-left: 8px;
+    margin-bottom: 10px;
+}
+
+.dict-sub-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #b8a0d0;
+    margin-bottom: 6px;
+}
+
+.dict-sub-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.dict-heroes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-left: 10px;
+}
+
+.dict-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 62px;
+}
+
+.dict-hero-img {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dict-hero-name {
+    font-size: 0.60rem;
+    color: #a0b0c0;
+    text-align: center;
+    line-height: 1.2;
+    word-break: keep-all;
+}
