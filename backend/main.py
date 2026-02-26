@@ -100,7 +100,7 @@ def create_puzzle(mode: str = Query("quick", description="quick, ranked, 또는 
         - mode: "quick" (일반전) / "ranked" (경쟁전) / "hard" (하드모드)
     """
     if mode == "hard":
-        puzzle = generate_puzzle_hard(min_optimal=20, max_optimal=100)
+        puzzle = generate_puzzle_hard(min_optimal=20, max_optimal=30, shuffle_moves=200)
     elif mode == "ranked":
         puzzle = generate_puzzle(min_optimal=20, max_optimal=25, layout="random")
     else:

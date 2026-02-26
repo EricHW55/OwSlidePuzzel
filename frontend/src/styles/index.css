@@ -532,3 +532,12 @@ body {
     line-height: 1.2;
     word-break: keep-all;
 }
+
+
+/* 탈론 로고 (하드모드) */
+.talon-logo {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.3));
+}

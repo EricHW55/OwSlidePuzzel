@@ -70,6 +70,24 @@ def get_adjacent_indices(index: int) -> List[int]:
         adjacent.append(index + 1)
     return adjacent
 
+def _manhattan_distance_to_goal(
+    state: Tuple[Optional[str], ...],
+    goal_state: Tuple[Optional[str], ...],
+) -> int:
+    """타일 기준 맨해튼 거리 합 (난이도/품질 체크용, 하드모드에서만 사용)"""
+    goal_pos: Dict[str, int] = {
+        tile: idx for idx, tile in enumerate(goal_state) if tile is not None
+    }
+    dist = 0
+    for idx, tile in enumerate(state):
+        if tile is None:
+            continue
+        gidx = goal_pos.get(tile)
+        if gidx is None:
+            continue
+        dist += abs((idx // 3) - (gidx // 3)) + abs((idx % 3) - (gidx % 3))
+    return dist
+
 
 def _get_abstract_neighbors(
     state: Tuple[Optional[str], ...],
@@ -327,28 +345,31 @@ def generate_puzzle_hard(
     min_optimal: int = 5,
     max_optimal: int = 25,
     shuffle_moves: int = 200,
-    max_attempts: int = 30,
+    max_attempts: int = 5,
     depth_limit: int = 50,
 ) -> Dict[str, Any]:
     """
-    하드 모드 퍼즐 생성 (역방향 셔플 방식)
+    하드 모드 퍼즐 생성 (역방향 셔플, BFS 생략)
 
-    [기존 방식의 문제]
-    하드모드는 세부역할이 거의 고유 → BFS 상태공간 ~181,440개
-    랜덤 배치 + BFS를 500번 반복하면 매우 느림
+    목표 난이도(=optimal_moves)를 [min_optimal, max_optimal]에서 랜덤으로 뽑고,
+    '정답 상태'에서 그만큼만 역방향 셔플하여:
 
-    [역방향 셔플 방식]
-    1) 정답 상태에서 빈칸을 N번 랜덤 이동 → 문제 생성
-    2) 풀 수 있음 100% 보장 → 스킵 없음
-    3) BFS를 시도당 1번만 실행 → 빠름
+    1) 항상 풀 수 있는 퍼즐 100% 보장
+    2) BFS/최적해 계산 생략 → 즉시 응답
+    3) 왕복 방지 + 상태 재방문 최소화로 체감 난이도가 목표치에 가깝게 유지
 
-    shuffle_moves=200이면 3x3 그리드가 충분히 섞여서
-    최적해가 대부분 15~31 범위에 분포
+    ※ shuffle_moves/depth_limit는 하위 호환(기존 호출부)용으로 남겨둡니다.
     """
-    best_state = None
-    best_optimal = -1
-    best_heroes = None
-    best_target = None
+    if min_optimal < 0:
+        raise ValueError("min_optimal must be >= 0")
+    if max_optimal < min_optimal:
+        raise ValueError("max_optimal must be >= min_optimal")
+
+    # 3x3 퍼즐 최단해 최대는 31수(참고)라 너무 큰 값은 자연스럽게 캡
+    max_optimal = min(max_optimal, 31)
+
+    # 한 영웅셋에서 목표 난이도에 맞는 상태를 찾기 위한 내부 재시도 횟수
+    inner_tries = max(10, min(40, shuffle_moves // 5)) if shuffle_moves > 0 else 20
 
     for _ in range(max_attempts):
         hard_data = get_random_heroes_for_hard()
@@ -357,68 +378,72 @@ def generate_puzzle_hard(
         target_roles = hard_data["target_sub_roles"]
         solved_state = hard_data["solved_state"]
 
-        # ── 역방향 셔플: 정답에서 빈칸을 N번 랜덤 이동 ──
-        state = list(solved_state)
-        empty_idx = state.index(None)
-        prev_idx = -1  # 직전 위치 (왕복 방지)
+        goal = tuple(solved_state)
 
-        for _ in range(shuffle_moves):
-            adj = get_adjacent_indices(empty_idx)
-            # 직전 위치 제외 → 왕복 없이 효율적 셔플
-            candidates = [a for a in adj if a != prev_idx]
-            if not candidates:
-                candidates = adj
-            next_idx = random.choice(candidates)
-            state[empty_idx], state[next_idx] = state[next_idx], state[empty_idx]
-            prev_idx = empty_idx
-            empty_idx = next_idx
+        for _ in range(inner_tries):
+            target_moves = random.randint(min_optimal, max_optimal)
 
-        initial_state = state
+            # ── 역방향 셔플: 정답에서 빈칸을 target_moves번 랜덤 이동 ──
+            state = list(solved_state)
+            empty_idx = state.index(None)
+            prev_idx = -1  # 직전 위치(왕복 방지)
 
-        # 이미 정답이면 스킵 (사실상 불가능)
-        if is_solved_hard(tuple(initial_state), target_roles):
-            continue
+            # 같은 상태 재방문을 최대한 피해서 '의도치 않게 쉬워지는' 경우를 줄임
+            seen = {tuple(state)}
 
-        # BFS 1번만 실행
-        optimal = calculate_optimal_moves_hard(
-            initial_state, target_roles, depth_limit=depth_limit
-        )
-        if optimal is None:
-            continue
+            for _step in range(target_moves):
+                adj = get_adjacent_indices(empty_idx)
 
-        heroes_info = {h: HEROES[h] for h in selected_heroes}
+                # 1차: 직전 위치로 왕복하는 move는 최대한 배제
+                candidates = [a for a in adj if a != prev_idx]
+                if not candidates:
+                    candidates = adj[:]
 
-        if optimal > best_optimal:
-            best_optimal = optimal
-            best_state = initial_state.copy()
-            best_heroes = heroes_info
-            best_target = target_roles
+                random.shuffle(candidates)
 
-        if min_optimal <= optimal <= max_optimal:
+                moved = False
+                for next_idx in candidates:
+                    # try move
+                    state[empty_idx], state[next_idx] = state[next_idx], state[empty_idx]
+                    t = tuple(state)
+                    if t not in seen:
+                        seen.add(t)
+                        prev_idx, empty_idx = empty_idx, next_idx
+                        moved = True
+                        break
+                    # revert
+                    state[empty_idx], state[next_idx] = state[next_idx], state[empty_idx]
+
+                if not moved:
+                    # 모든 후보가 재방문이면 어쩔 수 없이 진행(확률적으로 드묾)
+                    next_idx = random.choice(adj)
+                    state[empty_idx], state[next_idx] = state[next_idx], state[empty_idx]
+                    prev_idx, empty_idx = empty_idx, next_idx
+                    seen.add(tuple(state))
+
+            initial_state = state
+
+            # 이미 정답이면 스킵 (드물지만 방어)
+            if is_solved_hard(tuple(initial_state), target_roles):
+                continue
+
+            # 난이도 품질 체크: 맨해튼 하한이 너무 낮으면 상쇄(backtracking)가 많았던 것
+            manhattan_lb = _manhattan_distance_to_goal(tuple(initial_state), goal)
+            if manhattan_lb < max(2, target_moves - 4):
+                continue
+
+            heroes_info = {h: HEROES[h] for h in selected_heroes}
             empty_idx = initial_state.index(None)
+
             return {
                 "puzzle_id": str(uuid.uuid4()),
                 "initial_state": initial_state,
                 "target_roles": target_roles,
                 "empty_index": empty_idx,
                 "heroes": heroes_info,
-                "optimal_moves": optimal,
+                "optimal_moves": target_moves,  # BFS 생략 → '목표 난이도'를 optimal로 사용
                 "mode": "hard",
             }
-
-    # fallback
-    if best_state is not None and best_optimal >= 0:
-        empty_idx = best_state.index(None)
-        return {
-            "puzzle_id": str(uuid.uuid4()),
-            "initial_state": best_state,
-            "target_roles": best_target,
-            "empty_index": empty_idx,
-            "heroes": best_heroes,
-            "optimal_moves": best_optimal,
-            "mode": "hard",
-            "warning": f"Could not meet difficulty [{min_optimal}, {max_optimal}]. Returned {best_optimal}.",
-        }
 
     raise RuntimeError("Failed to generate hard puzzle")
 
