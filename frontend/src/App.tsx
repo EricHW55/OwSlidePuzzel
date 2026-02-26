@@ -20,6 +20,37 @@ const App: React.FC = () => {
   // 로딩 취소 플래그
   const cancelledRef = useRef<boolean>(false);
 
+  // 타일 이동 사운드 (public/sound/clicker.wav)
+  const clickSoundsRef = useRef<HTMLAudioElement[]>([]);
+  const clickSoundIdxRef = useRef<number>(0);
+
+  useEffect(() => {
+    // 개발 환경 StrictMode에서 effect 2번 실행될 수 있어서 방어
+    if (clickSoundsRef.current.length) return;
+
+    const POOL_SIZE = 6; // 연속 클릭 시 끊김 방지용
+    clickSoundsRef.current = Array.from({ length: POOL_SIZE }, () => {
+      const a = new Audio('/sound/clicker.wav'); // public 기준 경로
+      a.preload = 'auto';
+      a.volume = 0.6;
+      return a;
+    });
+  }, []);
+
+  const playClickSound = useCallback((): void => {
+    const pool = clickSoundsRef.current;
+    if (!pool.length) return;
+
+    const i = clickSoundIdxRef.current % pool.length;
+    clickSoundIdxRef.current += 1;
+
+    const a = pool[i];
+    try { a.currentTime = 0; } catch {}
+    a.play().catch(() => {
+      // 모바일/브라우저 정책으로 막히는 경우 무시 (사용자 제스처 후엔 보통 OK)
+    });
+  }, []);
+
   // 게임 상태
   const [gameState, setGameState] = useState<GameState>('idle');
   const [targetRoles, setTargetRoles] = useState<string[]>([]);
@@ -122,6 +153,8 @@ const App: React.FC = () => {
   const moveTile = useCallback((index: number): void => {
     if (!isAdjacent(index, emptyIndex)) return;
     if (gameState === 'completed') return;
+
+    playClickSound();
 
     const newTiles = [...puzzleTiles];
     newTiles[emptyIndex] = newTiles[index];
