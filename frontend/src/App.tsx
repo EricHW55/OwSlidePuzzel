@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import TriangleBackground from './components/TriangleBackground';
 import OverwatchLogoIcon from './components/icon/OverwatchLogoIcon';
 import { useTimer } from './hooks/useTimer';
@@ -16,6 +16,9 @@ const App: React.FC = () => {
 
   // 하드모드 토글
   const [isHardMode, setIsHardMode] = useState<boolean>(false);
+
+  // 로딩 취소 플래그
+  const cancelledRef = useRef<boolean>(false);
 
   // 게임 상태
   const [gameState, setGameState] = useState<GameState>('idle');
@@ -86,6 +89,10 @@ const App: React.FC = () => {
     setMoves(0);
 
     const puzzle = await api.createPuzzle(mode);
+
+    // API 응답 왔을 때 이미 취소됐으면 무시
+    if (cancelledRef.current) return;
+
     if (!puzzle) {
       alert('퍼즐 생성 실패! 백엔드를 확인해주세요.');
       return;
@@ -162,15 +169,18 @@ const App: React.FC = () => {
 
   // 게임 시작
   const startGame = async (mode: GameMode): Promise<void> => {
+    cancelledRef.current = false;
     setGameMode(mode);
     setScreen('loading');
 
     await initPuzzle(mode);
+    if (cancelledRef.current) return; // 취소됐으면 게임 화면으로 안 감
     setScreen('game');
   };
 
   // 메뉴로 돌아가기
   const goToMenu = (): void => {
+    cancelledRef.current = true; // 진행 중인 로딩 취소
     stopTimer();
     setShowResultModal(false);
     setShowNicknameModal(false);
@@ -204,10 +214,12 @@ const App: React.FC = () => {
 
   // 다시 하기
   const retryGame = async (): Promise<void> => {
+    cancelledRef.current = false;
     setShowResultModal(false);
     setScreen('loading');
 
     await initPuzzle(gameMode);
+    if (cancelledRef.current) return;
     setScreen('game');
   };
 
@@ -257,8 +269,17 @@ const App: React.FC = () => {
               </div>
 
               <div className="menu-logo">
-                <OverwatchLogoIcon size={160} />
-                <div className="menu-title">OVERWATCH</div>
+                {isHardMode ? (
+                    <img
+                        src="/talon.webp"
+                        alt="Talon Logo"
+                        className="talon-logo"
+                        draggable={false}
+                    />
+                ) : (
+                    <OverwatchLogoIcon size={160} />
+                )}
+                <div className="menu-title">{isHardMode ? 'TALON' : 'OVERWATCH'}</div>
                 <div className="menu-subtitle">
                   {isHardMode ? 'HARD PUZZLE' : 'ROLE PUZZLE'}
                 </div>
