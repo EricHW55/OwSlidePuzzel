@@ -637,14 +637,22 @@ const App: React.FC = () => {
                   {rankings.length === 0 ? (
                       <p className="no-ranking">기록이 없습니다</p>
                   ) : (
-                      rankings.map(r => (
-                          <div key={r.id} className="ranking-item">
-                            <span className="rank-position">#{r.rank}</span>
-                            <span className="rank-name">{r.nickname}</span>
-                            <span className="rank-time">{r.time_display}</span>
-                            <span className="rank-moves">{r.move_diff === 0 ? 'PERFECT' : `+${r.move_diff}`}</span>
-                          </div>
-                      ))
+                      rankings.map(r => {
+                        const tierNames = ['champion','grandmaster','master','diamond','platinum','gold','silver','bronz'];
+                        const tierImg = tierNames[Math.min(r.rank - 1, 7)] || 'bronz';
+                        return (
+                            <div key={r.id} className="ranking-item">
+                              <img
+                                  src={`/tier/${tierImg}.webp`}
+                                  alt={tierImg}
+                                  className="rank-tier-img"
+                              />
+                              <span className="rank-name">{r.nickname}</span>
+                              <span className="rank-time">{r.time_display}</span>
+                              <span className="rank-moves">{r.move_diff === 0 ? 'PERFECT' : `+${r.move_diff}`}</span>
+                            </div>
+                        );
+                      })
                   )}
                 </div>
                 <button className="modal-btn secondary" onClick={() => setShowRankingModal(false)}>닫기</button>
