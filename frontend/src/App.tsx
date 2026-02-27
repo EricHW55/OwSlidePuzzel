@@ -20,35 +20,47 @@ const App: React.FC = () => {
   // 로딩 취소 플래그
   const cancelledRef = useRef<boolean>(false);
 
-  // 타일 이동 사운드 (public/sound/clicker.wav)
-  const clickSoundsRef = useRef<HTMLAudioElement[]>([]);
-  const clickSoundIdxRef = useRef<number>(0);
+  // 타일 이동 사운드 (Web Audio API — 지연 없음)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
 
   useEffect(() => {
-    // 개발 환경 StrictMode에서 effect 2번 실행될 수 있어서 방어
-    if (clickSoundsRef.current.length) return;
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioCtxRef.current = ctx;
 
-    const POOL_SIZE = 6; // 연속 클릭 시 끊김 방지용
-    clickSoundsRef.current = Array.from({ length: POOL_SIZE }, () => {
-      const a = new Audio('/sound/clicker.wav'); // public 기준 경로
-      a.preload = 'auto';
-      a.volume = 0.6;
-      return a;
-    });
+    fetch('/sound/clicker.wav')
+        .then(res => res.arrayBuffer())
+        .then(buf => ctx.decodeAudioData(buf))
+        .then(decoded => { audioBufferRef.current = decoded; })
+        .catch(() => {});
+
+    return () => {
+      ctx.close();
+      // BGM도 정리
+      if (bgmRef.current) {
+        bgmRef.current.pause();
+        bgmRef.current.src = '';
+      }
+    };
   }, []);
 
   const playClickSound = useCallback((): void => {
-    const pool = clickSoundsRef.current;
-    if (!pool.length) return;
+    const ctx = audioCtxRef.current;
+    const buffer = audioBufferRef.current;
+    if (!ctx || !buffer) return;
 
-    const i = clickSoundIdxRef.current % pool.length;
-    clickSoundIdxRef.current += 1;
+    // suspended 상태면 resume (모바일 정책)
+    if (ctx.state === 'suspended') ctx.resume();
 
-    const a = pool[i];
-    try { a.currentTime = 0; } catch {}
-    a.play().catch(() => {
-      // 모바일/브라우저 정책으로 막히는 경우 무시 (사용자 제스처 후엔 보통 OK)
-    });
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.6;
+
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(0);
   }, []);
 
   // 게임 상태
@@ -73,6 +85,92 @@ const App: React.FC = () => {
   const [nickname, setNickname] = useState<string>('');
   const [rankings, setRankings] = useState<RankingRecord[]>([]);
   const [showDictModal, setShowDictModal] = useState<boolean>(false);
+
+  // ═══ BGM 시스템 ═══
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const bgmTrackRef = useRef<string>('');
+  const bgmUserInteracted = useRef<boolean>(false);
+
+  // 첫 클릭 후 BGM 활성화 (브라우저 정책)
+  useEffect(() => {
+    const handleInteraction = () => {
+      bgmUserInteracted.current = true;
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+    window.addEventListener('click', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+  }, []);
+
+  // 상태에 따라 BGM 트랙 결정 + 전환
+  useEffect(() => {
+    let targetTrack = '';
+
+    if (showRankingModal) {
+      // 랭킹 모달 — 모드 불문
+      targetTrack = '/sound/ranking.mp3';
+    } else if (screen === 'game') {
+      // 게임 플레이 중
+      targetTrack = isHardMode ? '/sound/hardmode_sound.mp3' : '/sound/easymode_sound.mp3';
+    } else {
+      // 메뉴 / 로딩 / 그 외
+      targetTrack = isHardMode ? '/sound/menu2.mp3' : '/sound/menu1.mp3';
+    }
+
+    // 같은 트랙이면 유지
+    if (bgmTrackRef.current === targetTrack) return;
+
+    // 기존 BGM 페이드아웃 후 전환
+    const prevAudio = bgmRef.current;
+    if (prevAudio) {
+      // 빠른 페이드아웃 (300ms)
+      const fadeOut = setInterval(() => {
+        if (prevAudio.volume > 0.05) {
+          prevAudio.volume = Math.max(0, prevAudio.volume - 0.05);
+        } else {
+          clearInterval(fadeOut);
+          prevAudio.pause();
+          prevAudio.src = '';
+        }
+      }, 30);
+    }
+
+    // 새 BGM 시작
+    bgmTrackRef.current = targetTrack;
+    const audio = new Audio(targetTrack);
+    audio.loop = true;
+    audio.volume = 0;
+    bgmRef.current = audio;
+
+    // 유저 인터랙션 후에만 재생 (브라우저 정책)
+    const tryPlay = () => {
+      if (!bgmUserInteracted.current) {
+        // 아직 인터랙션 없으면 잠시 후 재시도
+        setTimeout(tryPlay, 300);
+        return;
+      }
+      audio.play().then(() => {
+        // 페이드인 (300ms)
+        const fadeIn = setInterval(() => {
+          if (audio.volume < 0.25) {
+            audio.volume = Math.min(0.3, audio.volume + 0.03);
+          } else {
+            audio.volume = 0.3;
+            clearInterval(fadeIn);
+          }
+        }, 30);
+      }).catch(() => {});
+    };
+    setTimeout(tryPlay, 150); // 페이드아웃과 살짝 겹치게
+
+    return () => {
+      // cleanup: 컴포넌트 언마운트 시
+    };
+  }, [screen, isHardMode, showRankingModal]);
 
   // 정답 확인 - 기본 + 하드 모드 통합
   const checkSolved = useCallback((
